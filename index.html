@@ -156,6 +156,42 @@
   .recdot{width:14px;height:14px;border-radius:50%;background:var(--rec);display:inline-block;margin-right:8px;animation:blink .8s infinite}
   @keyframes blink{50%{opacity:.2}}
   .empty{text-align:center;color:var(--sub);padding:56px 10px;line-height:2;font-size:16px}
+
+  /* マイクの音メーター（音スイッチのめやす） */
+  #micBar{position:absolute;left:16px;right:16px;top:10px;height:16px;border-radius:8px;
+    background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);overflow:visible;z-index:2}
+  #micFill{height:100%;width:0%;border-radius:8px;background:linear-gradient(90deg,var(--teal),var(--gold));transition:width .05s linear}
+  #micThr{position:absolute;top:-4px;bottom:-4px;width:3px;background:var(--rec);border-radius:2px;left:50%}
+  .playbar button.on{background:var(--gold);color:#3a2b00;border-color:#c98e0a;box-shadow:0 3px 0 #c98e0a}
+
+  /* せってい・スライダー */
+  input[type=range]{width:100%;height:40px}
+  .seg{display:flex;gap:8px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:90px}
+  .seg button.on{background:var(--teal);color:#fff;border-color:var(--teal-d);box-shadow:0 3px 0 var(--teal-d)}
+  .setlabel{font-weight:700;margin:10px 0 8px;font-size:16px}
+  .setmeter{height:18px;border-radius:9px;background:#eee;border:1px solid var(--line);position:relative;margin-bottom:8px;overflow:visible}
+  #setMeterFill{height:100%;width:0%;border-radius:9px;background:linear-gradient(90deg,var(--teal),var(--gold))}
+  #setMeterThr{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--rec);border-radius:2px;left:50%}
+
+  /* 本カードの複製ボタン */
+  .book .dup{position:absolute;top:8px;right:8px;min-height:0;padding:6px 10px;font-size:13px;border-radius:10px;z-index:3}
+
+  /* 印刷（紙の絵本） */
+  #printArea{display:none}
+  @media print{
+    @page{margin:12mm}
+    body{background:#fff;padding:0}
+    body>*{display:none !important}
+    #printArea{display:block !important}
+    .p-title{font-size:20pt;font-weight:700;margin:0 0 8mm;text-align:center}
+    .p-grid{display:grid;grid-template-columns:1fr 1fr;gap:8mm}
+    .p-card{border:1px solid #bbb;border-radius:6px;padding:6mm;break-inside:avoid;text-align:center}
+    .p-card img{width:100%;height:60mm;object-fit:contain}
+    .p-ph{height:60mm;display:flex;align-items:center;justify-content:center;font-size:40pt;background:#f4efe4;border-radius:6px}
+    .p-num{font-weight:700;color:#666;font-size:11pt}
+    .p-label{font-size:16pt;font-weight:700;margin-top:4mm;word-break:break-word}
+  }
   .hide{display:none !important}
   @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
 </style>
@@ -167,6 +203,7 @@
   <header>
     <h1><span class="wave"><i></i><i></i><i></i><i></i><i></i></span>こえのほん</h1>
     <button id="btnImport">よみこみ</button>
+    <button id="btnExportAll">ぜんぶ かきだし</button>
     <button id="btnNewBook" class="primary">＋ ほんをつくる</button>
   </header>
   <main>
@@ -182,6 +219,7 @@
     <h1 id="editTitle">ほん</h1>
     <button id="btnRename">なまえ</button>
     <button id="btnExport">かきだし</button>
+    <button id="btnPrint">いんさつ</button>
     <button id="btnDeleteBook" class="danger">さくじょ</button>
     <button id="btnPlay" class="primary">▶ よむ</button>
   </header>
@@ -196,6 +234,7 @@
 <!-- 再生 -->
 <section id="play" class="screen">
   <div id="playStage">
+    <div id="micBar" class="hide"><div id="micFill"></div><div id="micThr"></div></div>
     <div id="playText"></div>
     <div id="playHint">がめんを タップ すると こえが ながれます</div>
   </div>
@@ -203,8 +242,10 @@
     <button id="btnPlayBack">とじる</button>
     <button id="btnPrev">◀ まえ</button>
     <div class="pos" id="playPos">1 / 1</div>
+    <button id="btnMic">🎤 おとスイッチ</button>
     <button id="btnNext">つぎ ▶</button>
     <button id="btnAuto">じどう ▶▶</button>
+    <button id="btnSettings">⚙</button>
   </div>
 </section>
 
@@ -246,6 +287,29 @@
   </div>
 </div>
 
+<!-- せってい（じどう送りの速さ・おとスイッチの感度） -->
+<div id="setModal" class="modal">
+  <div class="sheet">
+    <h2>せってい</h2>
+    <div class="setlabel">じどうで つぎへ すすむ はやさ</div>
+    <div class="row seg" id="segGap">
+      <button data-g="short">はやい</button>
+      <button data-g="normal">ふつう</button>
+      <button data-g="long">ゆっくり</button>
+    </div>
+    <div class="setlabel">おとスイッチの かんど（びんかんさ）</div>
+    <div class="setmeter"><div id="setMeterFill"></div><span id="setMeterThr"></span></div>
+    <input id="rngSens" type="range" min="1" max="99" value="50">
+    <div class="empty" style="padding:6px;font-size:14px;text-align:left">スライダーを うごかし、こえを だして あかい線を こえたら 反応します。<br>みぎに するほど 小さな音でも 反応します。</div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnSetClose" class="primary big" style="flex:1">とじる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 印刷用（ふだんは非表示。いんさつ時だけ出る） -->
+<div id="printArea"></div>
+
 <input id="fileImg" type="file" accept="image/*" class="hide">
 <input id="fileVid" type="file" accept="video/*" class="hide">
 <input id="fileJson" type="file" accept="application/json" class="hide">
@@ -274,7 +338,12 @@ async function delBook(id){const ps=await getPages(id);const s=db.transaction(['
 /* ---------- 画面切替 ---------- */
 const $=id=>document.getElementById(id);
 function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));}
-const url=b=>b?URL.createObjectURL(b):'';
+/* 画像・音声・動画のBlobはURL化して表示する。以前は描画のたびに新しいURLを作って
+   解放しておらず、使うほどメモリを消費していた。ここでBlobごとに1つだけURLを作って
+   使い回し（WeakMap）、画面を切り替える節目でまとめて解放する（revokeAll）。 */
+let _urlMap=new WeakMap();const _urlSet=new Set();
+function url(b){if(!b)return'';let u=_urlMap.get(b);if(!u){u=URL.createObjectURL(b);_urlMap.set(b,u);_urlSet.add(u);}return u;}
+function revokeAll(){_urlSet.forEach(u=>{try{URL.revokeObjectURL(u);}catch(e){}});_urlSet.clear();_urlMap=new WeakMap();}
 
 /* ---------- 自前ダイアログ ---------- */
 let dlgDone=null;
@@ -295,6 +364,7 @@ $('dlgInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('dlgYes').clic
 /* ---------- 本棚 ---------- */
 let bookId=null,book=null,pages=[];
 async function drawShelf(){
+  revokeAll();
   const books=await getBooks();
   $('shelfEmpty').classList.toggle('hide',books.length>0);
   const box=$('shelfList');box.innerHTML='';
@@ -303,9 +373,10 @@ async function drawShelf(){
     const cov=ps.find(p=>p.image);
     const coverInner=cov?`<img src="${url(cov.image)}">`:(ps.some(p=>p.video)?'🎬':'📖');
     const el=document.createElement('div');el.className='book';
-    el.innerHTML=`<div class="cover">${coverInner}</div>
+    el.innerHTML=`<button class="dup">ふくせい</button><div class="cover">${coverInner}</div>
       <div class="t"></div><div class="n">${ps.length} ページ</div>`;
     el.querySelector('.t').textContent=b.title;
+    el.querySelector('.dup').onclick=e=>{e.stopPropagation();dupBook(b.id);};
     el.onclick=()=>openBook(b.id);
     box.appendChild(el);
   }
@@ -318,6 +389,7 @@ $('btnNewBook').onclick=async()=>{
 
 /* ---------- 編集 ---------- */
 async function openBook(id){
+  revokeAll();
   bookId=id;book=await req(tx('books').get(id));pages=await getPages(id);
   $('editTitle').textContent=book.title;show('edit');drawPages();
 }
@@ -336,6 +408,7 @@ function drawPages(){
       <div class="body"><div class="label"></div><div class="state">${stateHtml}</div></div>
       <div class="ops">
         <button data-a="up">▲</button><button data-a="down">▼</button>
+        <button data-a="dup">ふくせい</button>
         <button data-a="edit" class="primary">なおす</button>
         <button data-a="del" class="danger">けす</button>
       </div>`;
@@ -347,6 +420,9 @@ function drawPages(){
 async function reorder(){for(let i=0;i<pages.length;i++){pages[i].order=i;await putPage(pages[i]);}}
 async function pageOp(a,i){
   if(a==='edit')return openRec(pages[i]);
+  if(a==='dup'){const p=pages[i];
+    const np={id:uid(),bookId,order:i+1,label:p.label,image:p.image,video:p.video,audio:p.audio};
+    pages.splice(i+1,0,np);await reorder();return drawPages();}
   if(a==='del'){if(!await dialog('この ページを けしますか？'))return;
     await delPage(pages[i].id);pages.splice(i,1);await reorder();return drawPages();}
   const j=a==='up'?i-1:i+1;if(j<0||j>=pages.length)return;
@@ -392,12 +468,13 @@ $('btnClearVid').onclick=()=>{vid=null;drawRecPreview();};
 
 /* 画像は長辺1600pxに縮小して保存（容量を抑え、iPadでも軽く動くため） */
 function shrink(file){return new Promise(ok=>{
-  const i=new Image();i.onload=()=>{
+  const i=new Image();const tmp=URL.createObjectURL(file);
+  i.onload=()=>{
     const m=1600,s=Math.min(1,m/Math.max(i.width,i.height));
     const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;
     c.getContext('2d').drawImage(i,0,0,c.width,c.height);
-    c.toBlob(b=>ok(b),'image/jpeg',.85);
-  };i.src=URL.createObjectURL(file);});}
+    c.toBlob(b=>{URL.revokeObjectURL(tmp);ok(b);},'image/jpeg',.85);
+  };i.src=tmp;});}
 
 $('btnRec').onclick=async()=>{
   if(mr&&mr.state==='recording'){mr.stop();return;}
@@ -427,7 +504,7 @@ $('btnRecSave').onclick=async()=>{
 /* ---------- 再生（こえの本） ---------- */
 let idx=0,player=null,auto=false;
 $('btnPlay').onclick=()=>{if(!pages.length)return alert('ページが ありません');idx=0;auto=false;show('play');drawPlay();};
-$('btnPlayBack').onclick=()=>{stopPlay();auto=false;show('edit');};
+$('btnPlayBack').onclick=()=>{stopPlay();auto=false;micToggle=false;$('btnMic').classList.remove('on');$('micBar').classList.add('hide');micStop();$('setModal').classList.remove('on');show('edit');};
 $('btnPrev').onclick=()=>{if(idx>0){idx--;drawPlay();}};
 $('btnNext').onclick=()=>{if(idx<pages.length-1){idx++;drawPlay();}};
 $('btnAuto').onclick=()=>{auto=!auto;$('btnAuto').textContent=auto?'じどう ■':'じどう ▶▶';if(auto)playCur();};
@@ -446,10 +523,10 @@ function playCur(){
   stopPlay();const p=pages[idx],st=$('playStage');
   /* 動画が あれば 動画（音つき）を さいせん。なければ ろくおんした こえ */
   const media=p.video?st.querySelector('video'):(p.audio?new Audio(url(p.audio)):null);
-  if(!media){if(auto)setTimeout(nextAuto,1200);return;}
+  if(!media){if(auto)setTimeout(nextAuto,gapMs(500));return;}
   player=media;if(p.video)media.currentTime=0;
   st.classList.add('playing');
-  media.onended=()=>{st.classList.remove('playing');if(auto)setTimeout(nextAuto,600);};
+  media.onended=()=>{st.classList.remove('playing');if(auto)setTimeout(nextAuto,gapMs());};
   media.play();
 }
 function nextAuto(){if(!auto)return;if(idx<pages.length-1){idx++;drawPlay();playCur();}
@@ -470,25 +547,140 @@ document.addEventListener('keydown',e=>{
 /* ---------- 書き出し／読み込み（バックアップ・他端末へ移す） ---------- */
 const b2d=b=>new Promise(ok=>{if(!b)return ok(null);const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(b);});
 async function d2b(d){if(!d)return null;return (await fetch(d)).blob();}
-$('btnExport').onclick=async()=>{
-  const data={title:book.title,pages:[]};
-  for(const p of pages)data.pages.push({label:p.label,order:p.order,image:await b2d(p.image),video:await b2d(p.video),audio:await b2d(p.audio)});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
-  a.download=`${book.title}.koebook.json`;a.click();
+function saveJson(obj,name){
+  const u=URL.createObjectURL(new Blob([JSON.stringify(obj)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=u;a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1500);
+}
+async function bookToData(b){
+  const ps=await getPages(b.id);const data={title:b.title,created:b.created,pages:[]};
+  for(const p of ps)data.pages.push({label:p.label,order:p.order,image:await b2d(p.image),video:await b2d(p.video),audio:await b2d(p.audio)});
+  return data;
+}
+async function importOne(d){
+  const b={id:uid(),title:d.title||'よみこんだ ほん',created:d.created||Date.now()};
+  await putBook(b);
+  for(const p of (d.pages||[]))await putPage({id:uid(),bookId:b.id,order:p.order,label:p.label,
+    image:await d2b(p.image),video:await d2b(p.video),audio:await d2b(p.audio)});
+}
+/* 1さつだけ かきだし */
+$('btnExport').onclick=async()=>{const d=await bookToData(book);saveJson(d,`${book.title}.koebook.json`);};
+/* ぜんぶ かきだし（本棚まるごとバックアップ） */
+$('btnExportAll').onclick=async()=>{
+  const books=await getBooks();if(!books.length)return alert('ほんが ありません');
+  const out={kind:'koelibrary',books:[]};
+  for(const b of books)out.books.push(await bookToData(b));
+  saveJson(out,'こえのほん_ぜんぶ.koelib.json');
 };
+/* よみこみ（1さつ / ぜんぶ どちらも 自動判別） */
 $('btnImport').onclick=()=>$('fileJson').click();
 $('fileJson').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
     const d=JSON.parse(await f.text());
-    const b={id:uid(),title:d.title||'よみこんだ ほん',created:Date.now()};
-    await putBook(b);
-    for(const p of d.pages)await putPage({id:uid(),bookId:b.id,order:p.order,label:p.label,
-      image:await d2b(p.image),video:await d2b(p.video),audio:await d2b(p.audio)});
-    alert('よみこみました');drawShelf();
+    if(d&&(d.kind==='koelibrary'||Array.isArray(d.books))){
+      for(const one of d.books)await importOne(one);
+      alert(`${(d.books||[]).length} さつ よみこみました`);
+    }else{await importOne(d);alert('よみこみました');}
+    drawShelf();
   }catch(err){alert('この ファイルは よみこめません');}
   e.target.value='';
+};
+
+/* ---------- 本の複製 ---------- */
+async function dupBook(id){
+  const src=await req(tx('books').get(id));const ps=await getPages(id);
+  const nb={id:uid(),title:(src.title||'ほん')+' の コピー',created:Date.now()};
+  await putBook(nb);
+  for(let i=0;i<ps.length;i++){const p=ps[i];
+    await putPage({id:uid(),bookId:nb.id,order:i,label:p.label,image:p.image,video:p.video,audio:p.audio});}
+  drawShelf();
+}
+
+/* ---------- せってい（じどう送りの速さ・おとスイッチ感度） ---------- */
+const SET_KEY='koenohon_set';
+let settings=Object.assign({gap:'normal',sens:50},(()=>{try{return JSON.parse(localStorage.getItem(SET_KEY)||'{}');}catch(e){return{};}})());
+function saveSet(){try{localStorage.setItem(SET_KEY,JSON.stringify(settings));}catch(e){}}
+const GAPMS={short:250,normal:700,long:1600};
+function gapMs(extra){return GAPMS[settings.gap||'normal']+(extra||0);}
+
+/* ---------- おとスイッチ（マイクの音量に反応して再生・ページ送り） ---------- */
+const METER_MAX=0.4; // メーター表示の上限（rms値）
+function micThreshold(){return 0.02+(100-settings.sens)/100*0.18;} // 感度が高いほど しきい値は低い
+function updateMeter(rms){
+  const pct=Math.min(100,rms/METER_MAX*100);
+  const f=$('micFill');if(f)f.style.width=pct+'%';
+  const sf=$('setMeterFill');if(sf)sf.style.width=pct+'%';
+}
+function placeThr(){
+  const l=Math.min(100,micThreshold()/METER_MAX*100)+'%';
+  const a=$('micThr');if(a)a.style.left=l;
+  const b=$('setMeterThr');if(b)b.style.left=l;
+}
+let micStream=null,micCtx=null,micAna=null,micRAF=null,micToggle=false,micArmed=true,micCool=0;
+async function micStart(){
+  if(micStream)return true;
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+    micCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(micCtx.state==='suspended')await micCtx.resume();
+    const src=micCtx.createMediaStreamSource(micStream);
+    micAna=micCtx.createAnalyser();micAna.fftSize=1024;src.connect(micAna);
+    const buf=new Uint8Array(micAna.fftSize);
+    const tick=()=>{
+      if(!micAna)return;
+      micAna.getByteTimeDomainData(buf);
+      let s=0;for(let i=0;i<buf.length;i++){const v=(buf[i]-128)/128;s+=v*v;}
+      const rms=Math.sqrt(s/buf.length);
+      updateMeter(rms);
+      const thr=micThreshold();
+      if(micToggle){
+        if(micArmed&&rms>thr&&Date.now()>micCool){micArmed=false;micCool=Date.now()+700;$('playStage').click();}
+        else if(!micArmed&&rms<thr*0.55)micArmed=true; // しずかに なったら また反応できる（誤作動よけ）
+      }
+      micRAF=requestAnimationFrame(tick);
+    };
+    placeThr();micRAF=requestAnimationFrame(tick);
+    return true;
+  }catch(e){micStream=null;micCtx=null;micAna=null;return false;}
+}
+function micStop(){
+  if(micRAF)cancelAnimationFrame(micRAF);micRAF=null;
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+  if(micCtx){try{micCtx.close();}catch(e){}micCtx=null;}
+  micAna=null;updateMeter(0);
+}
+$('btnMic').onclick=async()=>{
+  micToggle=!micToggle;micArmed=true;
+  $('btnMic').classList.toggle('on',micToggle);
+  $('micBar').classList.toggle('hide',!micToggle);
+  if(micToggle){
+    const ok=await micStart();
+    if(!ok){micToggle=false;$('btnMic').classList.remove('on');$('micBar').classList.add('hide');
+      alert('マイクが つかえません。https（GitHub Pages）で ひらき、マイクの きょかを ゆるしてください。');}
+    else placeThr();
+  }else if(!$('setModal').classList.contains('on')){micStop();}
+};
+$('btnSettings').onclick=async()=>{drawSetUI();$('setModal').classList.add('on');await micStart();placeThr();};
+$('btnSetClose').onclick=()=>{$('setModal').classList.remove('on');if(!micToggle)micStop();};
+function drawSetUI(){
+  document.querySelectorAll('#segGap button').forEach(b=>b.classList.toggle('on',b.dataset.g===(settings.gap||'normal')));
+  $('rngSens').value=settings.sens;placeThr();
+}
+document.querySelectorAll('#segGap button').forEach(b=>b.onclick=()=>{settings.gap=b.dataset.g;saveSet();drawSetUI();});
+$('rngSens').oninput=()=>{settings.sens=+$('rngSens').value;saveSet();placeThr();micArmed=true;};
+
+/* ---------- いんさつ（紙の絵本として出力） ---------- */
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+$('btnPrint').onclick=()=>{
+  if(!pages.length)return alert('ページが ありません');
+  let cards='';
+  pages.forEach((p,i)=>{
+    const vis=p.image?`<img src="${url(p.image)}">`:`<div class="p-ph">${p.video?'🎬':'🖼'}</div>`;
+    cards+=`<div class="p-card"><div class="p-num">${i+1}</div>${vis}<div class="p-label">${esc(p.label)||'&nbsp;'}</div></div>`;
+  });
+  $('printArea').innerHTML=`<div class="p-title">${esc(book.title)}</div><div class="p-grid">${cards}</div>`;
+  window.print();
 };
 
 if(location.protocol==='file:'){
