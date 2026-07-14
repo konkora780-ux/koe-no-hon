@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>こえのほん</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f2b36;
+    --paper:#fffdf7;
+    --shelfwood:#e8dcc8;
+    --card:#ffffff;
+    --line:#ddd3c2;
+    --teal:#3c7a89;        /* 再生・決定 */
+    --teal-d:#2c5d69;
+    --rec:#c4453b;         /* 録音 */
+    --gold:#f0b429;        /* ページ番号・アクセント */
+    --sub:#7a8894;
+    --r:20px;
+    --lift:0 6px 0 rgba(31,43,54,.10), 0 12px 24px -12px rgba(31,43,54,.35);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Zen Kaku Gothic New","Hiragino Maru Gothic ProN",system-ui,sans-serif;
+    -webkit-user-select:none;user-select:none;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  h1,h2,.book .t,.big{font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN",sans-serif}
+  .screen{display:none;height:100dvh;flex-direction:column}
+  .screen.on{display:flex}
+
+  /* ヘッダー：紙の帯 */
+  header{
+    display:flex;align-items:center;gap:8px;padding:12px 16px;flex:none;
+    background:linear-gradient(180deg,#fff,#fbf7ee);
+    border-bottom:1px solid var(--line);
+    box-shadow:0 6px 18px -14px rgba(31,43,54,.5);
+  }
+  header h1{font-size:22px;margin:0;flex:1;letter-spacing:.08em;display:flex;align-items:center;gap:10px}
+  /* 声の波形マーク（このアプリの目印） */
+  .wave{display:inline-flex;align-items:flex-end;gap:3px;height:22px}
+  .wave i{width:3px;border-radius:2px;background:var(--teal);animation:w 1.1s ease-in-out infinite}
+  .wave i:nth-child(1){height:40%;animation-delay:0s}
+  .wave i:nth-child(2){height:85%;animation-delay:.15s;background:var(--gold)}
+  .wave i:nth-child(3){height:60%;animation-delay:.3s}
+  .wave i:nth-child(4){height:100%;animation-delay:.45s;background:var(--rec)}
+  .wave i:nth-child(5){height:50%;animation-delay:.6s}
+  @keyframes w{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1)}}
+
+  button{
+    font:inherit;font-weight:600;color:var(--ink);background:#fff;
+    border:1.5px solid var(--line);border-radius:14px;padding:10px 16px;
+    box-shadow:0 3px 0 rgba(31,43,54,.10);cursor:pointer;min-height:48px;
+    transition:transform .08s,box-shadow .08s;
+  }
+  button:active{transform:translateY(3px);box-shadow:none}
+  button:focus-visible{outline:3px solid var(--teal);outline-offset:3px}
+  .primary{background:var(--teal);color:#fff;border-color:var(--teal-d);box-shadow:0 3px 0 var(--teal-d)}
+  .danger{background:#fff;color:var(--rec);border-color:#e6bdb8;box-shadow:0 3px 0 #e6bdb8}
+  .big{font-size:20px;font-weight:700;padding:15px 22px;border-radius:18px}
+  main{flex:1;overflow:auto;padding:24px 18px 40px}
+
+  /* 本棚：棚板の上に本が立つ */
+  .shelf{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+    gap:26px 20px;max-width:1100px;margin:0 auto;
+  }
+  .book{
+    position:relative;background:var(--card);border:1px solid var(--line);
+    border-radius:6px 16px 16px 6px;padding:12px 12px 14px;
+    box-shadow:var(--lift);cursor:pointer;text-align:left;
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .book::before{ /* 背表紙 */
+    content:"";position:absolute;left:0;top:0;bottom:0;width:10px;
+    border-radius:6px 0 0 6px;background:linear-gradient(180deg,var(--teal),var(--teal-d));
+  }
+  .book:hover,.book:focus-visible{transform:translateY(-6px) rotate(-.6deg);box-shadow:0 14px 0 rgba(31,43,54,.06),0 26px 34px -18px rgba(31,43,54,.5)}
+  .book .cover{
+    width:100%;aspect-ratio:4/3;border-radius:10px;overflow:hidden;margin-left:6px;
+    background:repeating-linear-gradient(135deg,#f6f1e6,#f6f1e6 10px,#f1ebdd 10px,#f1ebdd 20px);
+    display:flex;align-items:center;justify-content:center;font-size:36px;
+  }
+  .book .cover img{width:100%;height:100%;object-fit:cover}
+  .book .t{margin:10px 0 2px 6px;font-weight:700;font-size:17px;line-height:1.4;word-break:break-word}
+  .book .n{margin-left:6px;color:var(--sub);font-size:13px;letter-spacing:.04em}
+
+  /* ページ一覧 */
+  .pages{display:flex;flex-direction:column;gap:14px;max-width:780px;margin:0 auto}
+  .page{
+    position:relative;background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+    padding:14px 14px 14px 20px;display:flex;gap:14px;align-items:center;box-shadow:var(--lift);
+  }
+  .page::before{ /* 左端の綴じ目。こえがあると色がつく */
+    content:"";position:absolute;left:0;top:14px;bottom:14px;width:6px;border-radius:0 6px 6px 0;
+    background:var(--line);
+  }
+  .page.has::before{background:linear-gradient(180deg,var(--gold),var(--rec))}
+  .page .num{
+    width:36px;height:36px;flex:none;border-radius:12px;background:var(--ink);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:700;
+    font-family:"Zen Maru Gothic",sans-serif;
+  }
+  .thumb{
+    width:92px;height:70px;flex:none;border-radius:12px;overflow:hidden;font-size:26px;
+    background:repeating-linear-gradient(135deg,#f6f1e6,#f6f1e6 8px,#f1ebdd 8px,#f1ebdd 16px);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .page .body{flex:1;min-width:0}
+  .page .label{font-weight:700;font-size:17px;word-break:break-word}
+  .page .state{font-size:13px;color:var(--sub);margin-top:4px;display:flex;align-items:center;gap:6px}
+  .page .ops{display:flex;gap:6px;flex:none;flex-wrap:wrap;justify-content:flex-end}
+  .page .ops button{min-height:44px;padding:8px 12px;border-radius:12px;font-size:15px}
+
+  /* 再生：舞台 */
+  #play{background:radial-gradient(120% 100% at 50% 0%,#24384a 0%,#111c26 70%)}
+  #playStage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;overflow:hidden}
+  #playStage img{max-width:92%;max-height:88%;object-fit:contain;border-radius:18px;box-shadow:0 30px 60px -20px #000}
+  #playText{
+    color:#fff;font-family:"Zen Maru Gothic",sans-serif;
+    font-size:clamp(30px,6.5vw,72px);font-weight:700;padding:24px;text-align:center;line-height:1.5;
+  }
+  #playHint{position:absolute;left:0;right:0;bottom:16px;text-align:center;color:#8ea6b6;font-size:15px;letter-spacing:.06em}
+  #playStage.playing::after{
+    content:"";position:absolute;inset:12px;border-radius:24px;
+    box-shadow:0 0 0 6px var(--gold) inset;animation:glow 1.1s ease-in-out infinite;pointer-events:none;
+  }
+  @keyframes glow{0%,100%{opacity:.25}50%{opacity:.9}}
+  .playbar{display:flex;gap:10px;align-items:center;padding:12px 16px;background:rgba(8,15,21,.85);flex:none;backdrop-filter:blur(6px)}
+  .playbar .pos{color:#8ea6b6;flex:1;text-align:center;font-size:17px;letter-spacing:.1em}
+  .playbar button{background:#22384a;color:#fff;border-color:#365467;box-shadow:0 3px 0 #16283a}
+
+  /* 録音シート */
+  .modal{position:fixed;inset:0;background:rgba(17,28,38,.55);backdrop-filter:blur(3px);
+    display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+  .modal.on{display:flex}
+  .sheet{
+    background:var(--card);border-radius:26px;padding:22px;width:min(540px,100%);max-height:92dvh;overflow:auto;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.5);border-top:8px solid var(--gold);
+  }
+  .sheet h2{margin:0 0 14px;font-size:21px;letter-spacing:.04em}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  input[type=text]{
+    font:inherit;width:100%;padding:14px;border:1.5px solid var(--line);border-radius:14px;background:#fdfbf6;
+    -webkit-user-select:text;user-select:text;
+  }
+  input[type=text]:focus{outline:none;border-color:var(--teal);background:#fff}
+  #recPreview{border:1.5px dashed var(--line)}
+  .recdot{width:14px;height:14px;border-radius:50%;background:var(--rec);display:inline-block;margin-right:8px;animation:blink .8s infinite}
+  @keyframes blink{50%{opacity:.2}}
+  .empty{text-align:center;color:var(--sub);padding:56px 10px;line-height:2;font-size:16px}
+  .hide{display:none !important}
+  @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+
+<!-- 本棚 -->
+<section id="shelf" class="screen on">
+  <header>
+    <h1><span class="wave"><i></i><i></i><i></i><i></i><i></i></span>こえのほん</h1>
+    <button id="btnImport">よみこみ</button>
+    <button id="btnNewBook" class="primary">＋ ほんをつくる</button>
+  </header>
+  <main>
+    <div id="shelfList" class="shelf"></div>
+    <div id="shelfEmpty" class="empty">まだ ほんが ありません。<br>「＋ ほんをつくる」から はじめましょう。</div>
+  </main>
+</section>
+
+<!-- 編集 -->
+<section id="edit" class="screen">
+  <header>
+    <button id="btnBackShelf">← ほんだな</button>
+    <h1 id="editTitle">ほん</h1>
+    <button id="btnRename">なまえ</button>
+    <button id="btnExport">かきだし</button>
+    <button id="btnDeleteBook" class="danger">さくじょ</button>
+    <button id="btnPlay" class="primary">▶ よむ</button>
+  </header>
+  <main>
+    <div id="pageList" class="pages"></div>
+    <div style="max-width:760px;margin:16px auto 0">
+      <button id="btnAddPage" class="big primary" style="width:100%">＋ ページを ついか</button>
+    </div>
+  </main>
+</section>
+
+<!-- 再生 -->
+<section id="play" class="screen">
+  <div id="playStage">
+    <div id="playText"></div>
+    <div id="playHint">がめんを タップ すると こえが ながれます</div>
+  </div>
+  <div class="playbar">
+    <button id="btnPlayBack">とじる</button>
+    <button id="btnPrev">◀ まえ</button>
+    <div class="pos" id="playPos">1 / 1</div>
+    <button id="btnNext">つぎ ▶</button>
+    <button id="btnAuto">じどう ▶▶</button>
+  </div>
+</section>
+
+<!-- 録音モーダル -->
+<div id="recModal" class="modal">
+  <div class="sheet">
+    <h2 id="recTitle">ページ 1</h2>
+    <div class="row"><input id="recLabel" type="text" placeholder="ことば（がめんに でます）"></div>
+    <div class="row">
+      <button id="btnPickImg" class="big" style="flex:1">🖼 しゃしんを えらぶ</button>
+      <button id="btnClearImg">がぞうを けす</button>
+    </div>
+    <div id="recPreview" class="thumb" style="width:100%;height:180px;margin-bottom:12px"></div>
+    <div class="row">
+      <button id="btnRec" class="big danger" style="flex:1">● ろくおん</button>
+      <button id="btnPlayRec" class="big" style="flex:1">▶ きく</button>
+    </div>
+    <div id="recState" class="empty" style="padding:8px">こえは まだ ありません</div>
+    <div class="row" style="margin-top:8px">
+      <button id="btnRecCancel" style="flex:1">やめる</button>
+      <button id="btnRecSave" class="primary big" style="flex:2">ほぞん</button>
+    </div>
+  </div>
+</div>
+
+<!-- 自前ダイアログ（prompt/confirmが出ない環境でも確実に動く） -->
+<div id="dlg" class="modal">
+  <div class="sheet" style="max-width:420px">
+    <h2 id="dlgMsg">?</h2>
+    <div class="row"><input id="dlgInput" type="text"></div>
+    <div class="row">
+      <button id="dlgNo" style="flex:1">やめる</button>
+      <button id="dlgYes" class="primary big" style="flex:2">OK</button>
+    </div>
+  </div>
+</div>
+
+<input id="fileImg" type="file" accept="image/*" class="hide">
+<input id="fileJson" type="file" accept="application/json" class="hide">
+
+<script>
+/* ---------- IndexedDB（ブラウザ内の保存庫。音声・画像を大きいまま保存できる） ---------- */
+const DB='koenohon';let db;
+function open(){return new Promise((ok,ng)=>{const r=indexedDB.open(DB,1);
+  r.onupgradeneeded=e=>{const d=e.target.result;
+    d.createObjectStore('books',{keyPath:'id'});
+    const p=d.createObjectStore('pages',{keyPath:'id'});p.createIndex('book','bookId');};
+  r.onsuccess=e=>{db=e.target.result;ok()};r.onerror=()=>ng(r.error);});}
+function tx(s,m='readonly'){return db.transaction(s,m).objectStore(s);}
+function req(r){return new Promise((ok,ng)=>{r.onsuccess=()=>ok(r.result);r.onerror=()=>ng(r.error);});}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+async function getBooks(){const b=await req(tx('books').getAll());return b.sort((a,c)=>c.created-a.created);}
+async function getPages(id){const p=await req(tx('pages').index('book').getAll(id));return p.sort((a,b)=>a.order-b.order);}
+const putBook=b=>req(tx('books','readwrite').put(b));
+const putPage=p=>req(tx('pages','readwrite').put(p));
+const delPage=id=>req(tx('pages','readwrite').delete(id));
+async function delBook(id){const ps=await getPages(id);const s=db.transaction(['books','pages'],'readwrite');
+  ps.forEach(p=>s.objectStore('pages').delete(p.id));s.objectStore('books').delete(id);
+  return new Promise(ok=>s.oncomplete=ok);}
+
+/* ---------- 画面切替 ---------- */
+const $=id=>document.getElementById(id);
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));}
+const url=b=>b?URL.createObjectURL(b):'';
+
+/* ---------- 自前ダイアログ ---------- */
+let dlgDone=null;
+function dialog(msg,def){ // def が undefined なら確認ダイアログ
+  $('dlgMsg').textContent=msg;
+  const hasIn=def!==undefined;
+  $('dlgInput').parentElement.classList.toggle('hide',!hasIn);
+  $('dlgInput').value=hasIn?def:'';
+  $('dlg').classList.add('on');
+  if(hasIn)setTimeout(()=>$('dlgInput').focus(),50);
+  return new Promise(ok=>dlgDone=ok);
+}
+function closeDlg(v){$('dlg').classList.remove('on');if(dlgDone){dlgDone(v);dlgDone=null;}}
+$('dlgYes').onclick=()=>closeDlg($('dlgInput').parentElement.classList.contains('hide')?true:$('dlgInput').value);
+$('dlgNo').onclick=()=>closeDlg(null);
+$('dlgInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('dlgYes').click();});
+
+/* ---------- 本棚 ---------- */
+let bookId=null,book=null,pages=[];
+async function drawShelf(){
+  const books=await getBooks();
+  $('shelfEmpty').classList.toggle('hide',books.length>0);
+  const box=$('shelfList');box.innerHTML='';
+  for(const b of books){
+    const ps=await getPages(b.id);
+    const cov=ps.find(p=>p.image);
+    const el=document.createElement('div');el.className='book';
+    el.innerHTML=`<div class="cover">${cov?`<img src="${url(cov.image)}">`:'📖'}</div>
+      <div class="t"></div><div class="n">${ps.length} ページ</div>`;
+    el.querySelector('.t').textContent=b.title;
+    el.onclick=()=>openBook(b.id);
+    box.appendChild(el);
+  }
+}
+$('btnNewBook').onclick=async()=>{
+  const t=await dialog('ほんの なまえ','あたらしい ほん');if(t===null)return;
+  const b={id:uid(),title:t||'なまえのない ほん',created:Date.now()};
+  await putBook(b);openBook(b.id);
+};
+
+/* ---------- 編集 ---------- */
+async function openBook(id){
+  bookId=id;book=await req(tx('books').get(id));pages=await getPages(id);
+  $('editTitle').textContent=book.title;show('edit');drawPages();
+}
+function drawPages(){
+  const box=$('pageList');box.innerHTML='';
+  pages.forEach((p,i)=>{
+    const el=document.createElement('div');el.className='page'+(p.audio?' has':'');
+    el.innerHTML=`<div class="num">${i+1}</div>
+      <div class="thumb">${p.image?`<img src="${url(p.image)}">`:'🖼'}</div>
+      <div class="body"><div class="label"></div><div class="state">${p.audio?'<span class="wave" style="height:14px"><i></i><i></i><i></i><i></i><i></i></span> こえ あり':'こえは まだ ありません'}</div></div>
+      <div class="ops">
+        <button data-a="up">▲</button><button data-a="down">▼</button>
+        <button data-a="edit" class="primary">なおす</button>
+        <button data-a="del" class="danger">けす</button>
+      </div>`;
+    el.querySelector('.label').textContent=p.label||'（ことば なし）';
+    el.querySelectorAll('button').forEach(b=>b.onclick=()=>pageOp(b.dataset.a,i));
+    box.appendChild(el);
+  });
+}
+async function reorder(){for(let i=0;i<pages.length;i++){pages[i].order=i;await putPage(pages[i]);}}
+async function pageOp(a,i){
+  if(a==='edit')return openRec(pages[i]);
+  if(a==='del'){if(!await dialog('この ページを けしますか？'))return;
+    await delPage(pages[i].id);pages.splice(i,1);await reorder();return drawPages();}
+  const j=a==='up'?i-1:i+1;if(j<0||j>=pages.length)return;
+  [pages[i],pages[j]]=[pages[j],pages[i]];await reorder();drawPages();
+}
+$('btnBackShelf').onclick=()=>{show('shelf');drawShelf();};
+$('btnAddPage').onclick=()=>openRec(null);
+$('btnRename').onclick=async()=>{const t=await dialog('ほんの なまえ',book.title);if(!t)return;
+  book.title=t;await putBook(book);$('editTitle').textContent=t;};
+$('btnDeleteBook').onclick=async()=>{if(!await dialog(`「${book.title}」を まるごと けしますか？`))return;
+  await delBook(bookId);show('shelf');drawShelf();};
+
+/* ---------- 録音モーダル ---------- */
+let cur=null,img=null,aud=null,mr=null,chunks=[],prevAudio=null;
+function openRec(p){
+  cur=p;img=p?p.image:null;aud=p?p.audio:null;
+  $('recTitle').textContent=p?`ページ ${pages.indexOf(p)+1}`:`ページ ${pages.length+1}（あたらしい）`;
+  $('recLabel').value=p?(p.label||''):'';
+  drawRecPreview();$('recModal').classList.add('on');
+}
+function drawRecPreview(){
+  $('recPreview').innerHTML=img?`<img src="${url(img)}">`:'🖼';
+  $('recState').textContent=aud?'🔊 こえが あります':'こえは まだ ありません';
+}
+$('btnPickImg').onclick=()=>$('fileImg').click();
+$('fileImg').onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  img=await shrink(f);drawRecPreview();e.target.value='';};
+$('btnClearImg').onclick=()=>{img=null;drawRecPreview();};
+
+/* 画像は長辺1600pxに縮小して保存（容量を抑え、iPadでも軽く動くため） */
+function shrink(file){return new Promise(ok=>{
+  const i=new Image();i.onload=()=>{
+    const m=1600,s=Math.min(1,m/Math.max(i.width,i.height));
+    const c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;
+    c.getContext('2d').drawImage(i,0,0,c.width,c.height);
+    c.toBlob(b=>ok(b),'image/jpeg',.85);
+  };i.src=URL.createObjectURL(file);});}
+
+$('btnRec').onclick=async()=>{
+  if(mr&&mr.state==='recording'){mr.stop();return;}
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({audio:true});
+    mr=new MediaRecorder(st);chunks=[];
+    mr.ondataavailable=e=>chunks.push(e.data);
+    mr.onstop=()=>{aud=new Blob(chunks,{type:mr.mimeType||'audio/webm'});
+      st.getTracks().forEach(t=>t.stop());
+      $('btnRec').innerHTML='● ろくおん';$('btnRec').classList.add('danger');drawRecPreview();};
+    mr.start();
+    $('btnRec').innerHTML='<span class="recdot"></span>とめる';
+    $('recState').textContent='ろくおん ちゅう…';
+  }catch(e){alert('マイクが つかえません。ブラウザの マイク きょかを かくにんしてください。');}
+};
+$('btnPlayRec').onclick=()=>{if(!aud)return alert('こえが ありません');
+  new Audio(url(aud)).play();};
+$('btnRecCancel').onclick=()=>{if(mr&&mr.state==='recording')mr.stop();$('recModal').classList.remove('on');};
+$('btnRecSave').onclick=async()=>{
+  const label=$('recLabel').value.trim();
+  if(cur){cur.label=label;cur.image=img;cur.audio=aud;await putPage(cur);}
+  else{const p={id:uid(),bookId,order:pages.length,label,image:img,audio:aud};
+    await putPage(p);pages.push(p);}
+  $('recModal').classList.remove('on');drawPages();
+};
+
+/* ---------- 再生（こえの本） ---------- */
+let idx=0,player=null,auto=false;
+$('btnPlay').onclick=()=>{if(!pages.length)return alert('ページが ありません');idx=0;auto=false;show('play');drawPlay();};
+$('btnPlayBack').onclick=()=>{stopPlay();auto=false;show('edit');};
+$('btnPrev').onclick=()=>{if(idx>0){idx--;drawPlay();}};
+$('btnNext').onclick=()=>{if(idx<pages.length-1){idx++;drawPlay();}};
+$('btnAuto').onclick=()=>{auto=!auto;$('btnAuto').textContent=auto?'じどう ■':'じどう ▶▶';if(auto)playCur();};
+function drawPlay(){
+  const p=pages[idx],st=$('playStage');
+  st.querySelectorAll('img').forEach(e=>e.remove());
+  $('playText').textContent=p.image?'':(p.label||'');
+  if(p.image){const i=document.createElement('img');i.src=url(p.image);st.prepend(i);}
+  $('playPos').textContent=`${idx+1} / ${pages.length}`;
+}
+function stopPlay(){if(player){player.pause();player=null;}$('playStage').classList.remove('playing');}
+function playCur(){
+  stopPlay();const p=pages[idx];
+  if(!p.audio){if(auto)setTimeout(nextAuto,1200);return;}
+  player=new Audio(url(p.audio));
+  $('playStage').classList.add('playing');
+  player.onended=()=>{$('playStage').classList.remove('playing');if(auto)setTimeout(nextAuto,600);};
+  player.play();
+}
+function nextAuto(){if(!auto)return;if(idx<pages.length-1){idx++;drawPlay();playCur();}
+  else{auto=false;$('btnAuto').textContent='じどう ▶▶';}}
+/* 画面全体がスイッチ：タップで再生 → もう一度タップで次のページ */
+$('playStage').onclick=()=>{
+  if(player&&!player.paused){stopPlay();if(idx<pages.length-1){idx++;drawPlay();}return;}
+  playCur();
+};
+/* 外部スイッチ（キーボード入力として届くものが多い）：スペース／Enter=再生、矢印=ページ移動 */
+document.addEventListener('keydown',e=>{
+  if(!$('play').classList.contains('on'))return;
+  if(e.key===' '||e.key==='Enter'){e.preventDefault();$('playStage').click();}
+  if(e.key==='ArrowRight'){$('btnNext').click();}
+  if(e.key==='ArrowLeft'){$('btnPrev').click();}
+});
+
+/* ---------- 書き出し／読み込み（バックアップ・他端末へ移す） ---------- */
+const b2d=b=>new Promise(ok=>{if(!b)return ok(null);const r=new FileReader();r.onload=()=>ok(r.result);r.readAsDataURL(b);});
+async function d2b(d){if(!d)return null;return (await fetch(d)).blob();}
+$('btnExport').onclick=async()=>{
+  const data={title:book.title,pages:[]};
+  for(const p of pages)data.pages.push({label:p.label,order:p.order,image:await b2d(p.image),audio:await b2d(p.audio)});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));
+  a.download=`${book.title}.koebook.json`;a.click();
+};
+$('btnImport').onclick=()=>$('fileJson').click();
+$('fileJson').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    const b={id:uid(),title:d.title||'よみこんだ ほん',created:Date.now()};
+    await putBook(b);
+    for(const p of d.pages)await putPage({id:uid(),bookId:b.id,order:p.order,label:p.label,
+      image:await d2b(p.image),audio:await d2b(p.audio)});
+    alert('よみこみました');drawShelf();
+  }catch(err){alert('この ファイルは よみこめません');}
+  e.target.value='';
+};
+
+if(location.protocol==='file:'){
+  const w=document.createElement('div');
+  w.style.cssText='background:#c4453b;color:#fff;padding:10px 16px;font-size:14px;text-align:center';
+  w.textContent='この ひらきかたでは ろくおんが できません。GitHub Pages（https）から ひらいてください。';
+  document.body.prepend(w);
+}
+open().then(drawShelf);
+</script>
+</body>
+</html>
