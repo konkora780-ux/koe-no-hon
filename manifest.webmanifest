@@ -1,0 +1,13 @@
+{
+  "name": "こえのほん",
+  "short_name": "こえのほん",
+  "lang": "ja",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fffdf7",
+  "theme_color": "#3c7a89",
+  "icons": [
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
