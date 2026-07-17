@@ -183,6 +183,17 @@
   /* 本カードの複製ボタン */
   .book .dup{position:absolute;top:8px;right:8px;min-height:0;padding:6px 10px;font-size:13px;border-radius:10px;z-index:3}
 
+  /* シンボルえらび（ドロップス） */
+  .symgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;padding:4px}
+  .symtile{border:1.5px solid var(--line);border-radius:14px;background:#fff;padding:6px;
+    cursor:pointer;text-align:center;min-height:0;box-shadow:0 2px 0 rgba(31,43,54,.08)}
+  .symtile img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;display:block}
+  .symtile .w{font-size:13px;font-weight:700;margin-top:4px;word-break:break-word;line-height:1.3}
+  .symtile:active{transform:translateY(2px);box-shadow:none}
+  #symScroll{overflow:auto;flex:1;min-height:200px;-webkit-overflow-scrolling:touch}
+  #symBig{width:100%;height:200px;display:flex;align-items:center;justify-content:center}
+  #symBig img{max-width:100%;max-height:100%;object-fit:contain}
+
   /* 印刷（紙の絵本） */
   #printArea{display:none}
   @media print{
@@ -262,6 +273,7 @@
     <div class="row"><input id="recLabel" type="text" placeholder="ことば（がめんに でます）"></div>
     <div class="row">
       <button id="btnPickImg" class="big" style="flex:1">🖼 しゃしん</button>
+      <button id="btnPickSym" class="big" style="flex:1">🔣 シンボル</button>
       <button id="btnPickVid" class="big" style="flex:1">🎬 どうが</button>
     </div>
     <div class="row">
@@ -289,6 +301,36 @@
     <div class="row">
       <button id="dlgNo" style="flex:1">やめる</button>
       <button id="dlgYes" class="primary big" style="flex:2">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- シンボルえらび（ドロップス。画像はこのサイトに同梱＝外部サーバに つながない） -->
+<div id="symModal" class="modal">
+  <div class="sheet" style="max-width:860px;width:min(860px,100%);display:flex;flex-direction:column;overflow:hidden">
+    <h2>シンボルを えらぶ</h2>
+    <div class="row"><input id="symSearch" type="text" placeholder="ことば や よみ で さがす（れい：いぬ）"></div>
+    <div class="row seg" id="symCats"></div>
+    <div id="symCount" style="color:var(--sub);font-size:13px;margin-bottom:6px"></div>
+    <div id="symScroll">
+      <div id="symGrid" class="symgrid"></div>
+      <div id="symSentinel" style="height:1px"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btnSymCancel" class="big" style="flex:1">やめる</button>
+    </div>
+  </div>
+</div>
+
+<!-- シンボル かくにん（まちがい タップ よけ） -->
+<div id="symConfirm" class="modal" style="z-index:11">
+  <div class="sheet" style="max-width:420px;text-align:center">
+    <div id="symBig"></div>
+    <h2 id="symBigWord" style="margin:10px 0 2px"></h2>
+    <div id="symBigRead" style="color:var(--sub);font-size:15px"></div>
+    <div class="row" style="margin-top:16px">
+      <button id="btnSymBack" style="flex:1">もどる</button>
+      <button id="btnSymUse" class="primary big" style="flex:2">これに する</button>
     </div>
   </div>
 </div>
@@ -675,6 +717,88 @@ function drawSetUI(){
 }
 document.querySelectorAll('#segGap button').forEach(b=>b.onclick=()=>{settings.gap=b.dataset.g;saveSet();drawSetUI();});
 $('rngSens').oninput=()=>{settings.sens=+$('rngSens').value;saveSet();placeThr();micArmed=true;};
+
+/* ---------- シンボルえらび（ドロップス） ----------
+   画像・一覧ともこのサイトに同梱しているため、外部サーバには一切つながない。
+   えらんだシンボルは PNG を取り込んで page.image（Blob）に入れる＝写真と同じ扱い。
+   こうすると 再生・いんさつ・かきだし・ふくせい は そのまま動く。 */
+const SYM_CATS=[['','すべて'],['10','人・動植物'],['20','動き・様子'],['30','飲食物'],['40','家の中'],['50','家の外'],['60','文化・社会']];
+const SYM_CHUNK=120; // iPadが重くならないよう 少しずつ描画する
+let symList=null,symCat='',symFiltered=[],symShown=0,symPick=null,symIO=null;
+async function symLoad(){
+  if(symList)return symList;
+  const r=await fetch('symbols.json');
+  if(!r.ok)throw new Error('symbols.json '+r.status);
+  symList=await r.json();
+  return symList;
+}
+function symRenderChunk(){
+  const g=$('symGrid');
+  const end=Math.min(symShown+SYM_CHUNK,symFiltered.length);
+  const frag=document.createDocumentFragment();
+  for(let i=symShown;i<end;i++){
+    const s=symFiltered[i];
+    const t=document.createElement('button');t.className='symtile';
+    t.innerHTML=`<img loading="lazy" src="symbols/${s[0]}.png" alt=""><div class="w"></div>`;
+    t.querySelector('.w').textContent=s[1];
+    t.onclick=()=>symOpenConfirm(s);
+    frag.appendChild(t);
+  }
+  g.appendChild(frag);symShown=end;
+}
+function symFilter(){
+  const q=$('symSearch').value.trim().toLowerCase();
+  symFiltered=symList.filter(s=>{
+    if(symCat&&s[0].slice(0,2)!==symCat)return false;
+    if(!q)return true;
+    return s[1].toLowerCase().includes(q)||s[2].includes(q);
+  });
+  symShown=0;$('symGrid').innerHTML='';
+  $('symCount').textContent=`${symFiltered.length} こ`;
+  symRenderChunk();
+}
+function symOpenConfirm(s){
+  symPick=s;
+  $('symBig').innerHTML=`<img src="symbols/${s[0]}.png" alt="">`;
+  $('symBigWord').textContent=s[1];
+  $('symBigRead').textContent=s[2]||'';
+  $('symConfirm').classList.add('on');
+}
+$('btnPickSym').onclick=async()=>{
+  $('btnPickSym').disabled=true;
+  try{
+    await symLoad();
+    if(!$('symCats').childElementCount){
+      SYM_CATS.forEach(([v,name])=>{const b=document.createElement('button');
+        b.textContent=name;b.dataset.c=v;
+        b.onclick=()=>{symCat=v;document.querySelectorAll('#symCats button').forEach(x=>x.classList.toggle('on',x.dataset.c===v));symFilter();$('symScroll').scrollTop=0;};
+        $('symCats').appendChild(b);});
+      // スクロールで つづきを 読み込む
+      symIO=new IntersectionObserver(es=>{if(es[0].isIntersecting&&symShown<symFiltered.length)symRenderChunk();},{root:$('symScroll'),rootMargin:'300px'});
+      symIO.observe($('symSentinel'));
+    }
+    document.querySelectorAll('#symCats button').forEach(x=>x.classList.toggle('on',x.dataset.c===symCat));
+    symFilter();$('symScroll').scrollTop=0;
+    $('symModal').classList.add('on');
+  }catch(e){alert('シンボルの いちらんを よみこめませんでした。');}
+  $('btnPickSym').disabled=false;
+};
+$('symSearch').oninput=()=>{if(symList){symFilter();$('symScroll').scrollTop=0;}};
+$('btnSymCancel').onclick=()=>$('symModal').classList.remove('on');
+$('btnSymBack').onclick=()=>$('symConfirm').classList.remove('on');
+$('btnSymUse').onclick=async()=>{
+  if(!symPick)return;
+  try{
+    const r=await fetch(`symbols/${symPick[0]}.png`);
+    if(!r.ok)throw new Error('png '+r.status);
+    const b=await r.blob();
+    /* 種類を image/png に そろえる。サーバの設定しだいで octet-stream で返ることがあり、
+       その種類が かきだしJSONに そのまま入ると 他の端末で 絵が でないため。 */
+    img=b.type==='image/png'?b:new Blob([b],{type:'image/png'}); // 写真と同じ扱い（ことばは自動入力しない）
+    $('symConfirm').classList.remove('on');$('symModal').classList.remove('on');
+    drawRecPreview();
+  }catch(e){alert('この シンボルを とりこめませんでした。');}
+};
 
 /* ---------- いんさつ（紙の絵本として出力） ---------- */
 function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
