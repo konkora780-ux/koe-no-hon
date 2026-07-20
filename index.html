@@ -180,8 +180,9 @@
   #setMeterFill{height:100%;width:0%;border-radius:9px;background:linear-gradient(90deg,var(--teal),var(--gold))}
   #setMeterThr{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--rec);border-radius:2px;left:50%}
 
-  /* 本カードの複製ボタン */
-  .book .dup{position:absolute;top:8px;right:8px;min-height:0;padding:6px 10px;font-size:13px;border-radius:10px;z-index:3}
+  /* 本カードの操作ボタン（ふくせい・けす） */
+  .book .ops{position:absolute;top:8px;right:8px;display:flex;gap:6px;z-index:3}
+  .book .ops button{min-height:0;padding:6px 10px;font-size:13px;border-radius:10px}
 
   /* シンボルえらび（ドロップス） */
   .symgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;padding:4px}
@@ -379,9 +380,23 @@ async function getPages(id){const p=await req(tx('pages').index('book').getAll(i
 const putBook=b=>req(tx('books','readwrite').put(b));
 const putPage=p=>req(tx('pages','readwrite').put(p));
 const delPage=id=>req(tx('pages','readwrite').delete(id));
-async function delBook(id){const ps=await getPages(id);const s=db.transaction(['books','pages'],'readwrite');
-  ps.forEach(p=>s.objectStore('pages').delete(p.id));s.objectStore('books').delete(id);
-  return new Promise(ok=>s.oncomplete=ok);}
+/* 本をまるごと消す。
+   ・ページのIDだけを取る（getAllKeys）。以前は getPages で 画像・動画の中身まで
+     メモリに展開しており、大きい動画があるとiPadで失敗しやすかった。
+   ・oncomplete だけでなく onerror/onabort も見る。以前は失敗すると Promise が
+     永久に解決せず「押しても何も起きない（消えない）」状態になっていた。 */
+function delBook(id){return new Promise((ok,ng)=>{
+  let s;
+  try{s=db.transaction(['books','pages'],'readwrite');}catch(e){return ng(e);}
+  s.oncomplete=()=>ok();
+  s.onerror=()=>ng(s.error||new Error('さくじょに しっぱいしました'));
+  s.onabort=()=>ng(s.error||new Error('さくじょが ちゅうだんされました'));
+  const kr=s.objectStore('pages').index('book').getAllKeys(id);
+  kr.onsuccess=()=>{const st=s.objectStore('pages');
+    (kr.result||[]).forEach(k=>st.delete(k));
+    s.objectStore('books').delete(id);};
+  kr.onerror=()=>ng(kr.error||new Error('ページの よみこみに しっぱいしました'));
+});}
 
 /* ---------- 画面切替 ---------- */
 const $=id=>document.getElementById(id);
@@ -421,10 +436,16 @@ async function drawShelf(){
     const cov=ps.find(p=>p.image);
     const coverInner=cov?`<img src="${url(cov.image)}">`:(ps.some(p=>p.video)?'🎬':'📖');
     const el=document.createElement('div');el.className='book';
-    el.innerHTML=`<button class="dup">ふくせい</button><div class="cover">${coverInner}</div>
+    el.innerHTML=`<div class="ops"><button class="dup">ふくせい</button><button class="del danger">けす</button></div>
+      <div class="cover">${coverInner}</div>
       <div class="t"></div><div class="n">${ps.length} ページ</div>`;
     el.querySelector('.t').textContent=b.title;
     el.querySelector('.dup').onclick=e=>{e.stopPropagation();dupBook(b.id);};
+    /* 本棚から直接けせるようにする。ひらけなくなった本も ここから けせる */
+    el.querySelector('.del').onclick=async e=>{e.stopPropagation();
+      if(!await dialog(`「${b.title}」を まるごと けしますか？`))return;
+      try{await delBook(b.id);}catch(err){alert('けせませんでした。\n'+(err&&err.message||err));return;}
+      drawShelf();};
     el.onclick=()=>openBook(b.id);
     box.appendChild(el);
   }
@@ -472,7 +493,8 @@ async function pageOp(a,i){
     const np={id:uid(),bookId,order:i+1,label:p.label,image:p.image,video:p.video,audio:p.audio};
     pages.splice(i+1,0,np);await reorder();return drawPages();}
   if(a==='del'){if(!await dialog('この ページを けしますか？'))return;
-    await delPage(pages[i].id);pages.splice(i,1);await reorder();return drawPages();}
+    try{await delPage(pages[i].id);}catch(err){alert('けせませんでした。\n'+(err&&err.message||err));return;}
+    pages.splice(i,1);await reorder();return drawPages();}
   const j=a==='up'?i-1:i+1;if(j<0||j>=pages.length)return;
   [pages[i],pages[j]]=[pages[j],pages[i]];await reorder();drawPages();
 }
@@ -481,7 +503,8 @@ $('btnAddPage').onclick=()=>openRec(null);
 $('btnRename').onclick=async()=>{const t=await dialog('ほんの なまえ',book.title);if(!t)return;
   book.title=t;await putBook(book);$('editTitle').textContent=t;};
 $('btnDeleteBook').onclick=async()=>{if(!await dialog(`「${book.title}」を まるごと けしますか？`))return;
-  await delBook(bookId);show('shelf');drawShelf();};
+  try{await delBook(bookId);}catch(err){alert('けせませんでした。\n'+(err&&err.message||err));return;}
+  show('shelf');drawShelf();};
 
 /* ---------- 録音モーダル ---------- */
 let cur=null,img=null,vid=null,aud=null,mr=null,chunks=[],prevAudio=null;
